@@ -365,7 +365,7 @@ class MissRatioStats:
         if not path.exists(header_file_path):
             with open(header_file_path, "w+") as header_file:
                 header = "time"
-                for trace_time in range(start, end):
+                for trace_time in range(int(start), int(end)):
                     header += ",{}".format(trace_time)
                 header_file.write(header + "\n")
         file_path = "{}/data-ml-miss-timeline-{}-{}-{}-{}".format(
@@ -373,7 +373,7 @@ class MissRatioStats:
         )
         with open(file_path, "w+") as file:
             row = "{}".format(cache_type)
-            for trace_time in range(start, end):
+            for trace_time in range(int(start), int(end)):
                 row += ",{}".format(self.time_misses.get(trace_time, 0))
             file.write(row + "\n")
 
@@ -388,7 +388,7 @@ class MissRatioStats:
         if not path.exists(header_file_path):
             with open(header_file_path, "w+") as header_file:
                 header = "time"
-                for trace_time in range(start, end):
+                for trace_time in range(int(start), int(end)):
                     header += ",{}".format(trace_time)
                 header_file.write(header + "\n")
         file_path = "{}/data-ml-miss-ratio-timeline-{}-{}-{}-{}".format(
@@ -396,7 +396,7 @@ class MissRatioStats:
         )
         with open(file_path, "w+") as file:
             row = "{}".format(cache_type)
-            for trace_time in range(start, end):
+            for trace_time in range(int(start), int(end)):
                 naccesses = self.time_accesses.get(trace_time, 0)
                 miss_ratio = 0
                 if naccesses > 0:
@@ -439,7 +439,7 @@ class PolicyStats:
         if not path.exists(header_file_path):
             with open(header_file_path, "w+") as header_file:
                 header = "time"
-                for trace_time in range(start, end):
+                for trace_time in range(int(start), int(end)):
                     header += ",{}".format(trace_time)
                 header_file.write(header + "\n")
         file_path = "{}/data-ml-policy-timeline-{}-{}-{}-{}".format(
@@ -449,7 +449,7 @@ class PolicyStats:
             for policy in self.policy_names:
                 policy_name = self.policy_names[policy]
                 row = "{}-{}".format(cache_type, policy_name)
-                for trace_time in range(start, end):
+                for trace_time in range(int(start), int(end)):
                     row += ",{}".format(
                         self.time_selected_polices.get(trace_time, {}).get(
                             policy_name, 0
@@ -468,7 +468,7 @@ class PolicyStats:
         if not path.exists(header_file_path):
             with open(header_file_path, "w+") as header_file:
                 header = "time"
-                for trace_time in range(start, end):
+                for trace_time in range(int(start), int(end)):
                     header += ",{}".format(trace_time)
                 header_file.write(header + "\n")
         file_path = "{}/data-ml-policy-ratio-timeline-{}-{}-{}-{}".format(
@@ -478,7 +478,7 @@ class PolicyStats:
             for policy in self.policy_names:
                 policy_name = self.policy_names[policy]
                 row = "{}-{}".format(cache_type, policy_name)
-                for trace_time in range(start, end):
+                for trace_time in range(int(start), int(end)):
                     naccesses = self.time_accesses.get(trace_time, 0)
                     ratio = 0
                     if naccesses > 0:
@@ -524,8 +524,9 @@ class LRUPolicy(Policy):
     def prioritize_samples(self, samples, auxilliary_info):
         return sorted(
             samples,
-            cmp=lambda e1, e2: e1.value.last_access_number
-            - e2.value.last_access_number,
+            # cmp=lambda e1, e2: e1.value.last_access_number
+            # - e2.value.last_access_number,
+            key=lambda x: x.value.last_access_number
         )
 
     def policy_name(self):
@@ -536,8 +537,10 @@ class MRUPolicy(Policy):
     def prioritize_samples(self, samples, auxilliary_info):
         return sorted(
             samples,
-            cmp=lambda e1, e2: e2.value.last_access_number
-            - e1.value.last_access_number,
+            # cmp=lambda e1, e2: e2.value.last_access_number
+            # - e1.value.last_access_number,
+            key=lambda x: x.value.last_access_number,
+            reverse=True
         )
 
     def policy_name(self):
@@ -546,7 +549,8 @@ class MRUPolicy(Policy):
 
 class LFUPolicy(Policy):
     def prioritize_samples(self, samples, auxilliary_info):
-        return sorted(samples, cmp=lambda e1, e2: e1.value.num_hits - e2.value.num_hits)
+        # return sorted(samples, cmp=lambda e1, e2: e1.value.num_hits - e2.value.num_hits)
+        return sorted(samples, key=lambda e: e.value.num_hits)
 
     def policy_name(self):
         return "lfu"
@@ -1121,6 +1125,11 @@ class OPTCacheEntry:
         if other.next_access_seq_no != self.next_access_seq_no:
             return other.next_access_seq_no - self.next_access_seq_no
         return self.value_size - other.value_size
+    
+    def __lt__(self, other):
+        if other.next_access_seq_no != self.next_access_seq_no:
+            return other.next_access_seq_no < self.next_access_seq_no
+        return self.value_size < other.value_size
 
     def __repr__(self):
         return "({} {} {} {})".format(
@@ -1252,6 +1261,11 @@ class GDSizeEntry:
             return self.priority - other.priority
         return self.value_size - other.value_size
 
+    def __lt__(self, other):
+        if other.priority != self.priority:
+            return self.priority < other.priority
+        return self.value_size < other.value_size
+
     def __repr__(self):
         return "({} {} {} {})".format(
             self.key, self.next_access_seq_no, self.value_size, self.is_removed
@@ -1363,7 +1377,8 @@ class ARCCache(Cache):
     def __init__(self, cache_size, enable_cache_row_key):
         super(ARCCache, self).__init__(cache_size, enable_cache_row_key)
         self.table = {}
-        self.c = cache_size / 16 * 1024  # Number of elements in the cache.
+        # self.c = cache_size / 16 * 1024  # Number of elements in the cache.
+        self.c = cache_size / (4 * 1024 * 1024)
         self.p = 0  # Target size for the list T1
         # L1: only once recently
         self.t1 = Deque()  # T1: recent cache entries

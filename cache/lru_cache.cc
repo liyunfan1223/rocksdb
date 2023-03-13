@@ -905,7 +905,7 @@ std::shared_ptr<Cache> NewLRUCache(
       metadata_charge_policy, secondary_cache);
 }
 
-std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
+std::shared_ptr<Cache>  NewLRUCache(const LRUCacheOptions& cache_opts) {
   return NewLRUCache(cache_opts.capacity, cache_opts.num_shard_bits,
                      cache_opts.strict_capacity_limit,
                      cache_opts.high_pri_pool_ratio,
